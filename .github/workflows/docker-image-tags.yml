@@ -3,7 +3,7 @@ name: Docker Image CI
 on:
   push:
     tags:
-      - 'v*'
+      - '*'
     
 
 jobs:
@@ -21,18 +21,13 @@ jobs:
       run: |
         docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
 
-    - name: Get current tags
-      id: gen_tags
+    - name: Get current tag
+      id: tag
       run: |
-        if [[ $GITHUB_REF == 'refs/tags/'* ]]; then
-          TAGS='["user/image:latest","user/image:'${GITHUB_REF/refs\/tags\//}'"]'
-        else
-          TAGS='["user/image:latest"]'
-        fi
-        echo '::set-output name=tags::'$TAGS
+        echo "::set-output name=version_tag::${GITHUB_REF/refs\/tags\//}"
 
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag ${{ env.image-name }}:${{ fromJson(steps.gen_tags.outputs.tags) }}
+      run: docker build . --file Dockerfile --tag ${{ env.image-name }}:${{ steps.tag.outputs.version_tag }}
       
     - name: Docker Push
-      run: docker push ${{ env.image-name }}:${{ fromJson(steps.gen_tags.outputs.tags) }}
+      run: docker push ${{ env.image-name }}:${{ steps.tag.outputs.version_tag }}
