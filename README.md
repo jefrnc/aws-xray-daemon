@@ -1,7 +1,8 @@
 # aws-xray-daemon
 
-El siguiente documento describe las tareas necesarias para llevar a cabo la implementación del demonio de Xray en ECS. 
-El demonio de X-Ray es un intermediario entre aplicaciones backend y la api de X-Ray. Hace posible visualizar las trazas del backend en el servicio X-Ray en la consola de AWS. 
+Este proyecto es un demonio de X-Ray en ECS es poder visualizar las trazas de tu aplicación backend en el servicio X-Ray de la consola de AWS. El demonio de X-Ray actúa como intermediario entre tu aplicación backend y la API de X-Ray, permitiendo que las trazas sean enviadas y visualizadas de forma adecuada.
+
+
 
 ## Pre-requisitos
 - Una instancia de ECS en funcionamiento
@@ -81,6 +82,20 @@ Resources:
 
 ```
 
+
+## Habilitar VPC
+
+Para configurar una configuración de seguridad adecuada en tu VPC para permitir la comunicación entre el demonio de X-Ray y la consola de AWS X-Ray, debes seguir estos pasos:
+
+1. Accede a la consola de AWS VPC en tu cuenta de AWS.
+2. Selecciona tu VPC y haz clic en el botón "Security Groups" en el menú de navegación.
+3. Crea un nuevo Security Group o selecciona uno existente para asociarlo con tu tarea de ECS que ejecuta el demonio de X-Ray.
+4. Haz clic en el botón "Inbound Rules" y agrega una nueva regla para permitir el tráfico entrante desde el demonio de X-Ray al puerto UDP 2000.
+5. Haz clic en "Save" para guardar los cambios.
+
+Ten en cuenta que en caso de necesitar acceso a través de un firewall, debes abrir los puertos necesarios para que el demonio de X-Ray pueda comunicarse con los servicios de AWS X-Ray.
+
+También es importante que la tarea del demonio de X-Ray y los contenedores de tu aplicación estén en el mismo grupo de seguridad, de esta forma se podrán comunicar entre si.
 ## Permisos necesarios para el role
 
 Busca y selecciona el policy "AWSXRayDaemonWriteAccess" en la lista de policies. Si no lo encuentras, puedes crear uno nuevo.
@@ -100,6 +115,7 @@ Busca y selecciona el policy "AWSXRayDaemonWriteAccess" en la lista de policies.
     ]
 }
 ```
+
 Esta policy le da al rol acceso a los siguientes permisos de AWS X-Ray:
 
 - xray:PutTraceSegments permite al rol enviar segmentos de trazas a AWS X-Ray.
@@ -107,3 +123,48 @@ Esta policy le da al rol acceso a los siguientes permisos de AWS X-Ray:
 
 Puedes agregar esta policy a un rol existente o crear un nuevo rol y asignarle esta policy.
 Ten en cuenta que puedes ajustar los permisos a tus necesidades específicas, por ejemplo si vas a utilizar solo un servicio específico, puedes limitar los permisos a solo ese servicio.
+
+
+## Configuración del Servicio
+
+Para enviar las trazas de un servicio de ECS al demonio de X-Ray, debes modificar la configuración de tu Task Definition para incluir la información del demonio de X-Ray.
+
+Aquí te dejo un ejemplo de una Task Definition en formato JSON con los cambios necesarios para enviar las trazas al demonio de X-Ray:
+
+```json
+{
+    "containerDefinitions": [
+        {
+            "name": "example-service",
+            "image": "example-service-image",
+            "environment": [
+                {
+                    "name": "AWS_XRAY_DAEMON_ADDRESS",
+                    "value": "udp:<IP_ADDRESS>:2000"
+                }
+            ],
+            "portMappings": [
+                {
+                    "containerPort": 80
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "example-service-logs",
+                    "awslogs-region": "us-east-1"
+                }
+            }
+        }
+    ],
+    "family": "example-service-task"
+}
+```
+
+En este ejemplo se ha agregado una nueva entrada en el arreglo "environment" con el nombre "AWS_XRAY_DAEMON_ADDRESS" y el valor "udp:<IP_ADDRESS>:2000". Esto indica al SDK de AWS X-Ray en tu contenedor que envíe las trazas al demonio de X-Ray en lugar del endpoint predeterminado de AWS X-Ray.
+
+Ten en cuenta que debes reemplazar <IP_ADDRESS> con la dirección IP del demonio de X-Ray en tu clúster.
+
+Además, debes asegurarte de que tu servicio de ECS y el demonio de X-Ray estén en el mismo grupo de seguridad y que los puertos necesarios estén abiertos para permitir la comunicación entre el servicio y el demonio.
+
+También es importante asegurarte de que tu demonio de X-Ray esté configurado correctamente y esté recibiendo trazas correctamente, de esta forma podrás visualizar las trazas en la consola de AWS X-Ray.
